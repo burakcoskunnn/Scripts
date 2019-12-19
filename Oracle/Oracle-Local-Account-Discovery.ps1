@@ -22,7 +22,7 @@ $apipassword = $args[2]  #API Password (it can be both AD Account password or Lo
     #Write-Host $token
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Authorization", "Bearer $token")
-    $lookupfilter = "secrets?filter.searchText=$target&filter.searchField=server&filter.searchText=svc_pam_oracle &filter.searchField=username"
+    $lookupfilter = "secrets?filter.searchText=$target&filter.searchField=server&filter.searchText=svc_orc &filter.searchField=username"  #you can filter anyfield depends on your use cases. I used username field because of static name on all oracle servers.
     
     #write-host  "Query URL $api/$lookupfilter"
     $results = Invoke-RestMethod "$api/$lookupfilter" -Headers $headers
