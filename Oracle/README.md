@@ -6,3 +6,6 @@ Oracle Driver should be installed on SS or DE server.
 Domain User to invoke PS script
 PSRemoting should be enabled.
 the server that PS run should have access to SS URL. 
+
+Use Cases
+You have a lot of Oracle Servers and DBS. Each Server has more than 1 DB. You need to know the local accounts on each DB. You have the same naming condition on all DB.
