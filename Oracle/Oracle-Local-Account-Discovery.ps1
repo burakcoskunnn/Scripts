@@ -53,7 +53,7 @@ $apipassword = $args[2]  #API Password (it can be both AD Account password or Lo
         
     }
     }else{
-    throw "make sure that you pass datbase hostname and username"
+    throw "make sure that you have password database hostname and username"
     }
 
 # Copy Oracle Data Access.dll into DE folder or Secret server bin folder.
