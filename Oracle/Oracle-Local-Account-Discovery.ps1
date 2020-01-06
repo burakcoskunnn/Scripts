@@ -1,79 +1,24 @@
-try
-{
-$target = $args[0]  #it will get machine name from Computer output in Discovery settings
-$apiusername = $args[1]  #API Username (it can be both AD account or local account)
-$apipassword = $args[2]  #API Password (it can be both AD Account password or Local API account password)
 
-    $api = "SSURL/api/v1"
-    $tokenRoute = "SSURL/oauth2/token";
-    if($apiusername -and $apipassword){
-        $creds = @{
-            username = $apiusername
-            password = $apipassword
-            grant_type = "password"
-        }
-    } else{
-     throw "API Username or password not found"
-    }
-   if($target){
-    $token = ""
-    $response = Invoke-RestMethod $tokenRoute -Method Post -Body $creds
-    $token = $response.access_token;
-    #Write-Host $token
-    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-    $headers.Add("Authorization", "Bearer $token")
-    $lookupfilter = "secrets?filter.searchText=$target&filter.searchField=server&filter.searchText=svc_orc &filter.searchField=username"  #you can filter anyfield depends on your use cases. I used username field because of static name on all oracle servers.
-    
-    #write-host  "Query URL $api/$lookupfilter"
-    $results = Invoke-RestMethod "$api/$lookupfilter" -Headers $headers
-    #write-host $results
-    foreach($secret1 in $results.records)
-    {
-        $secretid = $secret1.id
-        
+#Oracle Database arguments
+$target = $args[0]
 
-        $secretobjectfilter = "/secrets/$secretid"
-        $secretobject = Invoke-RestMethod "$api/$secretobjectfilter" -Headers $headers        
-        foreach($item in $secretobject.items){
-            if($item.fieldName -eq "Username"  ){
-               $OracleUser = $item.itemValue
-            }
-            if($item.fieldName -eq "Password"  ){
-             $OraclePass = $item.itemValue
-            }
-            if($item.fieldName -eq "port"  ){
-             $ports = $item.itemValue
-          
-            }
-            if($item.fieldName -eq "database"  ){
-             $services = $item.itemValue
-             
-            }
-        }
-        
-    }
-    }else{
-    throw "make sure that you have password database hostname and username"
-    }
+#Secret server REST API Arguments
+$apiusername = $args[1]
+$apipassword = $args[2]
 
+$secretserverbaseurl = "https://SSURL"  #Update this URL
+
+$api = "$secretserverbaseurl/api/v1" 
+$tokenRoute = "$secretserverbaseurl/oauth2/token";
 # Copy Oracle Data Access.dll into DE folder or Secret server bin folder.
 Add-Type -Path "C:\Program Files\Thycotic Software Ltd\Distributed Engine\Oracle.DataAccess.dll"
-
-# Connection string
-
-$compConStr = "Data Source=(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=$target)(PORT=$ports)))(CONNECT_DATA=(SERVER=DEDICATED)(SERVICE_NAME=$services)));User Id=$OracleUser;Password=$OraclePass"
-
-# Connecion
-$connection= New-Object Oracle.DataAccess.Client.OracleConnection($compConStr)
-$connection.Open()
-
-
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$Accounts = @()
 Function Get-OracleAccounts{
-
     Param (
         [string]
         $UserName,
-        [System.String]
+        [string]
         $Password,
         [string]
         $ComputerName,
@@ -82,13 +27,20 @@ Function Get-OracleAccounts{
         [string]
         $Port
     )
-
     process{
-       
-         
-                try{
+        $connectionString =
+@"
+Data Source=(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=$target)(PORT=$port)))(CONNECT_DATA=(SERVER=DEDICATED)(SERVICE_NAME=$database)));User Id=$oracleusername;Password=$oraclepassword
+"@
 
-                        Write-Debug "Opened oracle connection"
+            try{
+            # Connecion
+           
+              $connection= New-Object Oracle.DataAccess.Client.OracleConnection($connectionString)
+              $connection.Open()
+             
+                try{
+                        #write-host "Get-OracleAccounts Method - Opened oracle connection"
                         $query = "SELECT * FROM DBA_ROLE_PRIVS WHERE GRANTED_ROLE = 'DBA'"
                         $command=$connection.CreateCommand()
                         $command.CommandText=$query
@@ -108,44 +60,93 @@ Function Get-OracleAccounts{
                 throw "An Error occured running the query: $($_.Exception.Message)"
             }
         }
-          
+         catch{
+             write-host "Get-OracleAccounts Method - Connection error: $($_.Exception.Message)"
+
+         }   
+
      }
+    
+            
+}
 
 
-$Accounts = @()
-if($services){
-    try {
-        $s = 0
-        $services.ForEach({
-            $serviceName = $services[$s]
-            $ServicePort = $ports[$s]
-            $results= @(Get-OracleAccounts -erroraction silentlycontinue -UserName $OracleUser -Password $OraclePass -ComputerName $target -ServiceName $serviceName -Port $ServicePort)
-            $results.ForEach({
-               $usrObj= New-Object -TypeName psobject 
-                $usrObj | Add-Member -MemberType NoteProperty -Name Machine -Value $Target
-                $usrObj | Add-Member -MemberType NoteProperty -Name Port -Value $ServicePort
-                $usrObj | Add-Member -MemberType NoteProperty -Name Database -Value $serviceName
-                $usrObj | Add-Member -MemberType NoteProperty -Name UserName -Value $_.GRANTEE
-                $usrObj | Add-Member -MemberType NoteProperty -Name Role -Value $_.GRANTED_ROLE
-                $usrObj | Add-Member -MemberType NoteProperty -Name Enabled -Value $true
-                $Accounts +=$usrObj
-            });
-            $s++
+
+try
+{
+    if($apiusername -and $apipassword){
+        $creds = @{
+            username = $apiusername
+            password = $apipassword
+            grant_type = "password"
+        }
+    } else{
+     throw "API Username or password not found"
+    }
+   if($target){
+    write-host "starting script $target"
+    $token = ""
+
+    $response = Invoke-RestMethod $tokenRoute -Method Post -Body $creds
+    $token = $response.access_token;
+  
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+    $headers.Add("Authorization", "Bearer $token")
+    
+    #######
+    #make sure that you have correct filter
+    #######
+    $lookupfilter = "secrets?filter.searchText=$target&filter.searchField=server&filter.searchText=oracle_username &filter.searchField=username" #update your username naming condition
+    $results = Invoke-RestMethod "$api/$lookupfilter" -Headers $headers
+    
+    foreach($secret1 in $results.records)
+    {
+       
+        $secretid = $secret1.id
+        
+        $secretobjectfilter = "/secrets/$secretid"
+        $secretobject = Invoke-RestMethod "$api/$secretobjectfilter" -Headers $headers        
+        foreach($item in $secretobject.items){
+            if($item.fieldName -eq "Username"  ){
+               $oracleusername = $item.itemValue
+            }
+            if($item.fieldName -eq "Password"  ){
+             $oraclepassword = $item.itemValue
+            }
+            if($item.fieldName -eq "port"  ){
+             $port = $item.itemValue
+            }
+            if($item.fieldName -eq "database"  ){
+             $database = $item.itemValue
+            }
+        }
+        #Write-Host "$database $port"
+        if($oracleusername -and $oraclepassword -and $port -and $database){
+         
+          ###################
+          #Run oracle discovery commands
+          ###################
+         
+        $results= @(Get-OracleAccounts -erroraction silentlycontinue -UserName $oracleusername -Password $oraclepassword -ComputerName $target -ServiceName $database -Port $port)
+       
+        $results.ForEach({
+
+            $usrObj= New-Object -TypeName psobject 
+            $usrObj | Add-Member -MemberType NoteProperty -Name Machine -Value $target
+            $usrObj | Add-Member -MemberType NoteProperty -Name Port -Value $port
+            $usrObj | Add-Member -MemberType NoteProperty -Name Database -Value $database
+            $usrObj | Add-Member -MemberType NoteProperty -Name UserName -Value $_.GRANTEE
+            $usrObj | Add-Member -MemberType NoteProperty -Name Role -Value $_.GRANTED_ROLE
+            $usrObj | Add-Member -MemberType NoteProperty -Name Enabled -Value $true
+            
+            $Accounts +=$usrObj
         });
-        return $Accounts
+        }
     }
-
-    catch {
-        throw $_.Exception.Message
+    }else{
+    throw "make sure that you pass datbase hostname and username"
     }
 }
-else {
-
-    throw "No Oracle instances running on machine"
-
-}
-}
-
 catch [System.Net.WebException]
 {
     Write-Host "----- Exception -----"
@@ -163,3 +164,5 @@ catch [System.Net.WebException]
         $modelState
     }
 }
+
+return $Accounts
