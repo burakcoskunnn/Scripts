@@ -1,4 +1,4 @@
-# Oracle Script to find local accounts in Oracle Servers
+# Oracle Script to find local accounts in Oracle Servers in Windows Environtmens
 Pre-requisites
 Oracle account in SS as a secret
 API username and password. API user should have view permission on that secret
