@@ -1,17 +1,19 @@
 
-#Oracle Database arguments
+#Oracle Database Hostname arguments
 $target = $args[0]
 
 #Secret server REST API Arguments
 $apiusername = $args[1]
 $apipassword = $args[2]
-
+#Auth Token
 $secretserverbaseurl = "https://SSURL"  #Update this URL
-
 $api = "$secretserverbaseurl/api/v1" 
 $tokenRoute = "$secretserverbaseurl/oauth2/token";
+
 # Copy Oracle Data Access.dll into DE folder or Secret server bin folder.
 Add-Type -Path "C:\Program Files\Thycotic Software Ltd\Distributed Engine\Oracle.DataAccess.dll"
+
+#if you get SSL error, add this line to ignore SSL
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Accounts = @()
 Function Get-OracleAccounts{
@@ -40,7 +42,7 @@ Data Source=(DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=$target)(POR
               $connection.Open()
              
                 try{
-                        #write-host "Get-OracleAccounts Method - Opened oracle connection"
+                        #it will query to select users that has dba role
                         $query = "SELECT * FROM DBA_ROLE_PRIVS WHERE GRANTED_ROLE = 'DBA'"
                         $command=$connection.CreateCommand()
                         $command.CommandText=$query
@@ -93,9 +95,8 @@ try
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Authorization", "Bearer $token")
     
-    #######
+   
     #make sure that you have correct filter
-    #######
     $lookupfilter = "secrets?filter.searchText=$target&filter.searchField=server&filter.searchText=oracle_username &filter.searchField=username" #update your username naming condition
     $results = Invoke-RestMethod "$api/$lookupfilter" -Headers $headers
     
@@ -123,10 +124,8 @@ try
         #Write-Host "$database $port"
         if($oracleusername -and $oraclepassword -and $port -and $database){
          
-          ###################
+       
           #Run oracle discovery commands
-          ###################
-         
         $results= @(Get-OracleAccounts -erroraction silentlycontinue -UserName $oracleusername -Password $oraclepassword -ComputerName $target -ServiceName $database -Port $port)
        
         $results.ForEach({
